@@ -17,7 +17,7 @@ https://github.com/proBaxia/vprofile-project
 2. Switch to the local-setup branch.
 3. cd into vagrant/Manual_provisioning.
 
-![alt text](vagrant_1.png)
+
 
 Bring up vm’s
 ~~~
@@ -32,27 +32,28 @@ vagrant plugin install vagrant-hostmanager
 ~~~ 
 It is important to note that bringing up the VMs will take sometime depending on your internet speed. If setup process stops, run vagrant up command again until all 5 VMs are up and running.
 
-![VMs-setup-complete.png](VMs-setup-complete.png.png)
+![vagrant setup completed](image.png)
+
 
 With all the VM’s now setup, lets validate via ssh into the VM’s starting with the web server named web01. Run command..
 ~~~
 vagrant ssh web01
 ~~~
-![alt text](image.png)
+
+![sshweb01](image-2.png)
 
 We are now inside the web server. Next, let us Check the host to validate all were automatically updated by running the cat command to view the content in in the /etc/hosts file
 ~~~
 cat /etc/hosts
 ~~~
-# cat /etc/hosts image 
-![alt text](image-1.png)
+
+![cat /etc/hosts](image-1.png)
 
 Great, now ping the app server to confirm connectivity and communication
 ~~~
 ping app01
 ~~~
-# ping app01 image
-![ping_app01_image](ping_app01_image.png)
+![ping app01](image-3.png)
 
 Connectivity was successful, logout of the web01 server and connect to the app01 server and check connectivity to the database VM db01, the memcache VM mc01 and the rabbitMQ VM respectively rmq01 since the application server will be communication directly with all 3 servers (VMs)
 ~~~
@@ -62,16 +63,15 @@ logout
 ~~~
 vagrant ssh app01
 ~~~
-# vagrant ssh app01 image 
-![ping-db01](ping-db01.png)
+![vagrant ssh app01](image-4.png)
 
 app01 connects to db01 successfully i.e we have connectivity between the application server and the database server
 
-# ping Mc01 image 
-![ping-mc01](ping-mc01.png)
+![ping mc01](image-5.png)
 
 same for app server and Memcache server mc01 and finally checking connectivity between app01 and queuing agent RabbitMQ server rmq01 was also successful.
-# ping rm image 
+
+![ping rmq01](image-6.png)
 
 # Provisioning the VMs
 The next stage will be to provision the servers manually and there are 6 different services that I will be provisioning in project architecture.
@@ -126,7 +126,8 @@ systemctl start mariadb
 systemctl enable mariadb
 systemctl status mariadb
 ~~~
-**systemctl status mariadb image**
+
+![systemctl status mariadb](image-7.png)
 
 RUN mysql secure installation script.
 ~~~
@@ -134,7 +135,8 @@ mysql_secure_installation
 ~~~
 For db root password, I used admin123
 
-**mysql_secure_installation image**
+![mysql_secure_installation](image-8.png)
+![mysql_secure_installation](image-9.png)
 
 Validate connectivity to db with command below: at the password prompt enter admin123 . If connection is succesful exit from DB.
 
@@ -144,6 +146,7 @@ mysql -u root -p
 exit
 ~~~
 **mysql -u root -p image**
+![mysql -u root -p](image-10.png)
 
 I proceeded to clone source code to db VM, change directory to src/main/resources/ to get the `sql queries.
 
@@ -152,8 +155,8 @@ git clone https://github.com/devopshydclub/vprofile-project.git
 
 cd vprofile-project/src/main/resources/
 ~~~
-**git clone https://github.com/devopshydclub/vprofile-project.git
-cd vprofile-project/src/main/resources/**=image
+![git clone db connection ](image-11.png)
+
 
 Create a database account, Configure the db and initialize
 ~~~json
@@ -168,11 +171,11 @@ mysql -u root -p"$DATABASE_PASS" accounts < src/main/resources/db_backup.sql
 mysql -u root -p"$DATABASE_PASS" -e "FLUSH PRIVILEGES"
 
 ~~~
-**mysql -u root -p"$DATABASE_PASS" -e "FLUSH PRIVILEGES"** image
+![alt text](image-12.png)
 
 Login to the database and verify
 ~~~
-msql -u root -p "$DATABASE_PASS"
+mysql -u root -p "$DATABASE_PASS"
 ~~~
 **Login to the database and verify** image
 
@@ -296,3 +299,101 @@ wget https://archive.apache.org/dist/tomcat/tomcat-8/v8.5.37/bin/apache-tomcat-8
 tar xzvf apache-tomcat-8.5.37.tar.gz
 ~~~
 
+Add tomcat user and copy data to tomcat home directory.
+
+Check the new user tomcat with id tomcat command.
+~~~
+useradd --home-dir /usr/local/tomcat8 --shell /sbin/nologin tomcat
+~~~
+Copy your data to /usr/local/tomcat8 directory which is the home-directory for tomcat user.
+~~~
+cp -r /tmp/apache-tomcat-8.5.37/* /usr/local/tomcat8/
+~~~
+Observe that root user has ownership of all files under /usr/local/tomcat8/ directory, change it to tomcat user.
+~~~
+ls -l /usr/local/tomcat8/
+chown -R tomcat.tomcat /usr/local/tomcat8
+ls -l /usr/local/tomcat8/
+~~~
+
+## Setup systemd for tomcat
+Create a file with below content. once created, Use systemctl start tomcat to start tomcat and systemctl stop tomcat to stop tomcat service.
+~~~json
+[Unit] 
+Description=Tomcat 
+After=network.target
+[Service]
+User=tomcat
+WorkingDirectory=/usr/local/tomcat8 
+Environment=JRE_HOME=/usr/lib/jvm/jre 
+Environment=JAVA_HOME=/usr/lib/jvm/jre 
+Environment=CATALINA_HOME=/usr/local/tomcat8 
+Environment=CATALINE_BASE=/usr/local/tomcat8 
+ExecStart=/usr/local/tomcat8/bin/catalina.sh run 
+ExecStop=/usr/local/tomcat8/bin/shutdown.sh 
+SyslogIdentifier=tomcat-%i
+[Install] 
+WantedBy=multi-user.target
+~~~
+
+Any changes made to file under /etc/systemd/system/ directory, we need to run below command to be effective and Enable tomcat service.
+
+The service name tomcat has to be same as given /etc/systemd/system/tomcat.service .
+~~~
+systemctl daemon-reload
+~~~
+~~~
+systemctl enable tomcat
+systemctl start tomcat
+systemctl status tomcat
+~~~
+## Code Build & Deploy to Tomcat(app01) Server
+Clone the source code into the /tmp directory, then cd into the vproject-project directory.
+
+~~~
+git clone https://github.com/devopshydclub/vprofile-project.git
+cd vprofile-project/
+~~~
+To build the artifact with maven, we need to Update the configuration file that connect the backen services i.e, db, memcaches and the queuing agent rabbitMQ service.
+
+This is done by editing the application.properties file in the /src/main/resources/application.properties file using a text editor of your choice. I sued vim.
+
+~~~
+vim src/main/resources/application.propertie
+~~~
+**In application.properties file**
+
+
+Ensure the settings are correct. Check DB configuration: we named the db server db01 , and we have admin user with password admin123 setup as credentials.
+
+For memcached service, hostname is mc01 and we validated it is listening on tcp port 11211.
+
+For rabbitMQ, hostname is rmq01 and we have created user test with pwd test.
+
+~~~
+#JDBC Configutation for Database Connection
+jdbc.driverClassName=com.mysql.jdbc.Driver
+jdbc.url=jdbc:mysql://db01:3306/accounts?useUnicode=true&characterEncoding=UTF-8&zeroDateTimeBehavior=convertToNull
+jdbc.username=admin
+jdbc.password=admin123
+
+#Memcached Configuration For Active and StandBy Host
+#For Active Host
+memcached.active.host=mc01
+memcached.active.port=11211
+#For StandBy Host
+memcached.standBy.host=127.0.0.2
+memcached.standBy.port=11211
+
+#RabbitMq Configuration
+rabbitmq.address=rmq01
+rabbitmq.port=5672
+rabbitmq.username=test
+rabbitmq.password=test
+
+#Elasticesearch Configuration
+elasticsearch.host =192.168.1.85
+elasticsearch.port =9300
+elasticsearch.cluster=vprofile
+elasticsearch.node=vprofilenode
+~~~
