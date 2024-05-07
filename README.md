@@ -118,7 +118,8 @@ source /etc/profile
 
 Next is to install Maria DB and git Package
 ~~~
-yum install git mariadb-server -y
+
+
 ~~~
 Once Mariadb is installed, start and enable mariadb service. Also ensure to check the status of mariadb service to make sure it’s active (running)
 ~~~
@@ -177,7 +178,8 @@ Login to the database and verify
 ~~~
 mysql -u root -p "$DATABASE_PASS"
 ~~~
-**Login to the database and verify** image
+
+![images](image-13.png)
 
 Restart Mariadb server and logout, db is provisioned and ready
 ~~~
@@ -208,7 +210,9 @@ systemctl start memcached
 systemctl enable memcached
 systemctl status memcached
 ~~~
-**systemctl status memcached** IMAGE
+
+![alt text](image-14.png)
+
 To enable memcached to listen on TCP port 11211 and UDP port 11111 run below command.
 
 ~~~
@@ -218,8 +222,9 @@ To Validate if the port is running, run command
 ~~~
 ss -tunlp | grep 11211
 ~~~
-**ss -tunlp | grep 11211** image
 
+
+![alt text](image-15.png)
 The Caching server is provisioned and ready, exit from server and continue to the next flow setup.
 
 # Provisioning RabbitMQ
@@ -243,6 +248,7 @@ wget http://packages.erlang-solutions.com/erlang-solutions-2.0-1.noarch.rpm
 sudo rpm -Uvh erlang-solutions-2.0-1.noarch.rpm
 sudo yum -y install erlang socat
 ~~~
+
 Next Install RabbitMQ server with command below
 ~~~
 curl -s https://packagecloud.io/install/repositories/rabbitmq/rabbitmq-server/script.rpm.sh | sudo bash
@@ -255,7 +261,8 @@ systemctl start rabbitmq-server
 systemctl enable rabbitmq-server
 systemctl status rabbitmq-server
 ~~~
-**systemctl status rabbitmq-server**image
+
+![alt text](image-16.png)
 
 Set up a config change to Create a test user with password test, Create user_tag for the test user as administrator .
 
@@ -263,8 +270,11 @@ Restart rabbitmq service after config change completion
 ~~~
 cd
 echo "[{rabbit, [{loopback_users, []}]}]." > /etc/rabbitmq/rabbitmq.config
+
 rabbitmqctl add_user test test
+
 rabbitmqctl set_user_tags test administrator
+
 systemctl restart rabbitmq-server
 ~~~
 
@@ -272,7 +282,7 @@ Validate service is active/running after restart
 ~~~
 systemctl status rabbitmq-server
 ~~~
-**systemctl status rabbitmq-server** image
+![alt text](image-17.png)
 
 Great!, exit rmq01 server to the next service.
 
@@ -294,9 +304,9 @@ yum install git maven wget -y
 ~~~
 (change directory) cd to /tmp/ directory, and download Tomcat.
 ~~~json
-cd /tmp
-wget https://archive.apache.org/dist/tomcat/tomcat-8/v8.5.37/bin/apache-tomcat-8.5.37.tar.
-tar xzvf apache-tomcat-8.5.37.tar.gz
+wget https://dlcdn.apache.org/tomcat/tomcat-8/v8.5.100/bin/apache-tomcat-8.5.100.tar.gz
+
+tar -xzvf apache-tomcat-8.5.100.tar.gz
 ~~~
 
 Add tomcat user and copy data to tomcat home directory.
@@ -304,10 +314,11 @@ Add tomcat user and copy data to tomcat home directory.
 Check the new user tomcat with id tomcat command.
 ~~~
 useradd --home-dir /usr/local/tomcat8 --shell /sbin/nologin tomcat
+
 ~~~
 Copy your data to /usr/local/tomcat8 directory which is the home-directory for tomcat user.
 ~~~
-cp -r /tmp/apache-tomcat-8.5.37/* /usr/local/tomcat8/
+rsync -avzh /tmp/apache-tomcat-8.5.100 /usr/local/tomcat8/
 ~~~
 Observe that root user has ownership of all files under /usr/local/tomcat8/ directory, change it to tomcat user.
 ~~~
@@ -315,24 +326,29 @@ ls -l /usr/local/tomcat8/
 chown -R tomcat.tomcat /usr/local/tomcat8
 ls -l /usr/local/tomcat8/
 ~~~
+![alt text](image-18.png)
 
 ## Setup systemd for tomcat
 Create a file with below content. once created, Use systemctl start tomcat to start tomcat and systemctl stop tomcat to stop tomcat service.
 ~~~json
-[Unit] 
-Description=Tomcat 
-After=network.target
+[Unit]
+Description=Apache Tomcat Web Application Container
+After=syslog.target network.target
+
 [Service]
+Type=forking
 User=tomcat
-WorkingDirectory=/usr/local/tomcat8 
-Environment=JRE_HOME=/usr/lib/jvm/jre 
-Environment=JAVA_HOME=/usr/lib/jvm/jre 
-Environment=CATALINA_HOME=/usr/local/tomcat8 
-Environment=CATALINE_BASE=/usr/local/tomcat8 
-ExecStart=/usr/local/tomcat8/bin/catalina.sh run 
-ExecStop=/usr/local/tomcat8/bin/shutdown.sh 
-SyslogIdentifier=tomcat-%i
-[Install] 
+Group=tomcat
+WorkingDirectory=/usr/local/tomcat8
+Environment=JAVA_HOME=/usr/lib/jvm/jre
+
+ExecStart=/usr/local/tomcat8/apache-tomcat-8.5.100/bin/startup.sh
+ExecStop=/usr/local/tomcat8/apache-tomcat-8.5.100/bin/shutdown.sh
+
+Restart=on-failure
+RestartSec=10
+
+[Install]
 WantedBy=multi-user.target
 ~~~
 
@@ -343,15 +359,20 @@ The service name tomcat has to be same as given /etc/systemd/system/tomcat.servi
 systemctl daemon-reload
 ~~~
 ~~~
+systemctl start tomcat
 systemctl enable tomcat
 systemctl status tomcat
 ~~~
+![alt text](image-19.png)
+
 ## Code Build & Deploy to Tomcat(app01) Server
 Clone the source code into the /tmp directory, then cd into the vproject-project directory.
 
 ~~~
-git clone https://github.com/devopshydclub/vprofile-project.git
+git clone https://github.com/Adutoby/vprofile-project.git
 cd vprofile-project/
+mvn clean
+mvn install 
 ~~~
 To build the artifact with maven, we need to Update the configuration file that connect the backen services i.e, db, memcaches and the queuing agent rabbitMQ service.
 
@@ -396,3 +417,92 @@ elasticsearch.port =9300
 elasticsearch.cluster=vprofile
 elasticsearch.node=vprofilenode
 ~~~
+
+Next we build our code with maven using mvn install command to creat our artifact.Run below command inside the repository (vprofile-project). An Artifact will be created /tmp/vprofile-project/target/vprofile-v2.war
+
+![alt text](image-20.png)
+![alt text](image-22.png)
+
+~~~
+cd target/
+ls
+~~~
+cd to target and list to see the artifact, remove the default app from the Tomcat server and deploy the newly built artifact vprofile-v2.var to the Tomcat server
+
+Ensure to stop the server first before removing the default from the /usr/local/tomcat8/webapps/ROOT directory. Give about 120seconds allowing the server to stop properly . use these command
+
+~~~
+systemctl stop tomcat
+
+systemctl status tomcat
+
+rm -rf /usr/local/tomcat8/apache-tomcat-8.5.100/webapps/ROOT
+~~~
+![alt text](image-23.png)
+
+With our artifact is the vprofile-project/target directory, copy the artifact to /usr/local/tomcat8/webapps/ directory as ROOT.war then start tomcat server. Once started, it will extract our artifact ROOT.war under ROOT directory.
+
+~~~
+cd ..
+
+cp target/vprofile-v2.war /usr/local/tomcat8/apache-tomcat-8.5.100/webapps/ROOT.war
+
+ls /usr/local/tomcat8/apache-tomcat-8.5.100/webapps
+
+systemctl start tomcat
+~~~
+
+Give the application sometime to come up say around 200secs, whilw this happens we can proceed to set us the nginx server
+
+# Setup Nginx SVC
+We used Ubuntu for the Nginx server, while all other servers are CentOs . As usually as per best practice, update OS with latest patches run below command this time using apt package manager:
+
+~~~
+vagrant ssh web01
+sudo apt update && sudo apt upgrade
+
+~~~
+Switch to root user and install nginx.
+~~~
+sudo -i
+apt install nginx -y
+~~~
+Next we create an nginx configuration file under directory /etc/nginx/sites-available/. This allows nginx to act as a load balancer with below content:
+~~~
+vim /etc/nginx/sites-available/vproapp
+~~~
+~~~
+upstream vproapp {
+server app01:8080;
+}
+server {
+listen 80;
+location / {
+proxy_pass http://vproapp;
+}
+}
+~~~
+Remove default nginx config file:
+~~~
+rm -rf /etc/nginx/sites-enabled/default
+~~~
+Create a symbolic link for our configuration file using default config location detailed below to enable our site and restart nginx server.
+
+~~~
+ln -s /etc/nginx/sites-available/vproapp /etc/nginx/sites-enabled/vproapp
+
+systemctl restart nginx
+~~~
+Validate Application(stacks) from Browser
+From inside of the web01 server, run ifconfig command to display its IP address. IP address of our web01 : 192.168.56.11
+
+![alt text](image-27.png)
+
+![alt text](image-24.png)
+
+Next validate db connection using credentials admin_vp for both username and password. connect successful!! show that app is running from Tomcat server through the web server..
+
+![alt text](image-25.png)
+To validate RabbitMQ connection, click RabbitMQ on page and it should return below on display.
+
+![alt text](image-26.png)
