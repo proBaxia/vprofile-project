@@ -344,7 +344,6 @@ systemctl daemon-reload
 ~~~
 ~~~
 systemctl enable tomcat
-systemctl start tomcat
 systemctl status tomcat
 ~~~
 ## Code Build & Deploy to Tomcat(app01) Server
